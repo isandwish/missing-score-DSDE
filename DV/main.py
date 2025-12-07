@@ -27,6 +27,28 @@ try:
 except ImportError:
     st.error("ไม่พบโมดูล 'page.scattermap' หรือฟังก์ชัน 'render_scatter_map'")
 
+# FN Heat Map
+try:
+    from page.fn_heatmap import render_fn_heat_map
+except ImportError:
+    st.error("ไม่พบโมดูล 'page.fn_heatmap' หรือฟังก์ชัน 'render_fn_heat_map'")
+   
+# FN Hexagon Map
+try:
+    from page.fn_hexmap import render_fn_hex_map
+except ImportError:
+    st.error("ไม่พบโมดูล 'page.fn_hexmap' หรือฟังก์ชัน 'render_fn_hex_map'")
+ 
+# IM Heat Map
+try:
+    from page.im_heatmap import render_im_heat_map
+except ImportError:
+    st.error("ไม่พบโมดูล 'page.im_heatmap' หรือฟังก์ชัน 'render_im_heat_map'")
+ 
+# -----------------------------------------------------
+# Title
+# -----------------------------------------------------
+
 st.title('Urban LiveRisk & Priority Estimation System') 
 st.subheader('ระบบประเมินความเสี่ยงและความเร่งด่วนแบบเรียลไทม์')
 
@@ -227,17 +249,26 @@ with tab_ranking:
     else:
         st.info("ไม่พบข้อมูลเหตุการณ์ที่ตรงตามตัวกรองที่กำหนด")
 
-    # -----------------------------------------------------
-    # 🔥 เพิ่มตารางข้อมูลดิบที่ถูกกรองแล้ว (ตามที่ร้องขอ)
-    # -----------------------------------------------------
     st.markdown("---")
     
     st.header('🔍 ข้อมูลเหตุการณ์ที่ถูกกรอง (Data Table)')
     st.caption(f'แสดงข้อมูล **{len(filtered_data)}** รายการ ที่ผ่านตัวกรองทั้งหมด')
+
+    map_data = filtered_data[[
+        'comment',
+        'district',
+        'timestamp',
+        'count_reopen',
+        'longitude',
+        'latitude',
+        'public_impact',
+        'predicted_urgency',
+        'predicted_score',
+        'final_hybrid_score'
+    ]].copy()
     
-    if not filtered_data.empty:
-        # แสดงข้อมูลทั้งหมด (ทุกคอลัมน์)
-        st.dataframe(filtered_data, use_container_width=True)
+    if not map_data.empty:
+        st.dataframe(map_data, use_container_width=True)
     else:
         st.info("ไม่พบข้อมูลเหตุการณ์ที่ตรงตามตัวกรองที่กำหนด เพื่อแสดงในตารางนี้")
     # -----------------------------------------------------
@@ -253,6 +284,30 @@ with tab_scatter:
     if not filtered_data.empty:
         try:
             render_scatter_map(filtered_data, map_style)
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการแสดง Urgency Map: {e}")
+    else:
+        st.info("ไม่พบข้อมูลเหตุการณ์ที่ตรงตามตัวกรอง")
+
+    if not filtered_data.empty:
+        try:
+            render_im_heat_map(filtered_data, map_style)
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการแสดง Urgency Map: {e}")
+    else:
+        st.info("ไม่พบข้อมูลเหตุการณ์ที่ตรงตามตัวกรอง")
+
+    if not filtered_data.empty:
+        try:
+            render_fn_heat_map(filtered_data, map_style)
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการแสดง Urgency Map: {e}")
+    else:
+        st.info("ไม่พบข้อมูลเหตุการณ์ที่ตรงตามตัวกรอง")
+
+    if not filtered_data.empty:
+        try:
+            render_fn_hex_map(filtered_data, map_style)
         except Exception as e:
             st.error(f"เกิดข้อผิดพลาดในการแสดง Urgency Map: {e}")
     else:

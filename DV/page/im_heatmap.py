@@ -10,15 +10,21 @@ MAP_STYLES = {
     'Satellite': pdk.map_styles.SATELLITE,
 }
 
-def render_heat_map(filtered_data, map_style):
+def render_im_heat_map(filtered_data, map_style):
 
-    st.header("🔥 Heatmap Only (Hotspot)")
+    st.header("🔥 Heatmap score_impact_norm")
 
     if filtered_data.empty:
         st.warning("ไม่มีข้อมูล")
         return
+    
+    map_data = filtered_data[[
+        "longitude",
+        "latitude",
+        "score_impact_norm",
+    ]].copy()
 
-    filtered_data["weight"] = filtered_data["rank"].fillna(0)
+    map_data["weight"] = map_data["score_impact_norm"].fillna(0)
 
     heat_color_range = [
         [0, 255, 0],
@@ -29,7 +35,7 @@ def render_heat_map(filtered_data, map_style):
 
     heatmap_layer = pdk.Layer(
         "HeatmapLayer",
-        filtered_data,
+        map_data,
         get_position=["longitude", "latitude"],
         get_weight="weight",
         radiusPixels=70,
@@ -42,7 +48,7 @@ def render_heat_map(filtered_data, map_style):
     view_state = pdk.ViewState(
         latitude=filtered_data["latitude"].mean(),
         longitude=filtered_data["longitude"].mean(),
-        zoom=12
+        zoom=10
     )
 
     st.pydeck_chart(
