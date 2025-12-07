@@ -281,3 +281,15 @@ Future UI Adjustments:
 - Bangkok Metropolitan Administration (BMA) — Open geospatial data
 - Google Gemini, HuggingFace, LightGBM
 - Tools: Pandas, Spark, GeoPandas, Streamlit
+
+---
+
+Members :
+```
+Khanes Tantiwatthanarom
+Purinut Jamma 
+Natthanicha Jamjuree
+Nuttamas Udomsantitham
+Patcharamon Seehra
+Picharyawee Chartruanglerd
+```
