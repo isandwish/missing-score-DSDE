@@ -100,7 +100,7 @@ def render_scatter_map(filtered_data, map_style):
         get_position=["longitude", "latitude"],
         get_fill_color="final_hybrid_score_color",
         get_line_color="final_hybrid_score_color",
-        get_radius=220,
+        get_radius=150,
         line_width_min_pixels=2,
         pickable=True,
         opacity=0.8,
