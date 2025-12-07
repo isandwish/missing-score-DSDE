@@ -284,7 +284,7 @@ Future UI Adjustments:
 
 ---
 
-Members :
+## 👥 Members
 ```
 Khanes Tantiwatthanarom
 Purinut Jamma 
@@ -293,3 +293,8 @@ Nuttamas Udomsantitham
 Patcharamon Seehra
 Picharyawee Chartruanglerd
 ```
+
+---
+
+## 📽️ Presentation
+👉 [Click to View Presentation on Canva](https://www.canva.com/design/DAG5sUlbMyI/xHvMby2x4Kx88agO2kQWaw/edit?utm_content=DAG5sUlbMyI&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
