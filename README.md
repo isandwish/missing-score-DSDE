@@ -70,7 +70,7 @@ MISSING-SCORE-DSDE/
 │   ├── mapenv/                     # virtual environment (optional / local use)
 │       ├── page/                   # Streamlit page modules
 │       ├── scattermap.py           # scatter-based visualization
-│       ├── sidebar_filters.py      # sidebar UI filters for Streamlit
+│       └── sidebar_filters.py      # sidebar UI filters for Streamlit
 │
 ├── Places/          # Web-scraped public-place datasets
 ├── pics/            # Figures & diagrams
