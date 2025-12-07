@@ -85,11 +85,15 @@ def render_scatter_map(filtered_data, map_style):
     map_data = filtered_data[[
         "longitude",
         "latitude",
+        "comment",
         "district",
+        "timestamp",
         "final_hybrid_score_color",
         "final_hybrid_score_label",
     ]].copy()
 
+    # 🕒 แก้ timestamp ไม่ให้เป็น [object Object]
+    map_data["timestamp"] = pd.to_datetime(map_data["timestamp"]).dt.strftime("%Y-%m-%d %H:%M:%S")
 
     # -------------------------------
     # 🟢 4) สร้าง Scatter Layer
@@ -119,7 +123,7 @@ def render_scatter_map(filtered_data, map_style):
             layers=[scatter_layer],
             initial_view_state=view_state,
             map_style=MAP_STYLES[map_style],
-            tooltip={"text": "{final_hybrid_score_label}"}
+            tooltip={"text": "Urgency: {final_hybrid_score_label}\nDistrict: {district}\nComment: {comment}\nTime: {timestamp}"}
         ),
         height=650
     )
