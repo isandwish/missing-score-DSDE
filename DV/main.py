@@ -8,6 +8,13 @@ from datetime import datetime
 from sklearn.cluster import DBSCAN
 from sklearn.neighbors import KernelDensity
 
+try:
+    from scipy.spatial import cKDTree
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+
+
 # Sidebar
 try:
     from page.sidebar_filters import render_sidebar_filters
@@ -20,21 +27,13 @@ try:
 except ImportError:
     st.error("ไม่พบโมดูล 'page.scattermap' หรือฟังก์ชัน 'render_scatter_map'")
 
-# # District Map
-# try:
-#     from page.districtmap import render_district_map
-# except ImportError:
-#     st.error("ไม่พบโมดูล 'page.districtmap' หรือฟังก์ชัน 'render_district_map'")
+st.title('Urban LiveRisk & Priority Estimation System') 
+st.subheader('ระบบประเมินความเสี่ยงและความเร่งด่วนแบบเรียลไทม์')
 
-# Place Map
-try:
-    from page.placemap import render_place_map
-except ImportError:
-    st.error("ไม่พบโมดูล 'page.placemap' หรือฟังก์ชัน 'render_place_map'")
+# -----------------------------------------------------
+# 🗄️ การโหลดข้อมูล Traffy Fondue (result.csv) และ สถานที่
+# -----------------------------------------------------
 
-st.title('Data Science for Traffy Fondue Dataset') 
-
-# From test_data.csv
 @st.cache_data
 def load_result_data():
     data_result = pd.read_csv('result.csv')
@@ -54,21 +53,48 @@ def load_result_data():
 
 data_result = load_result_data()
 
-# # From gdf_public_impact.csv
-# @st.cache_data
-# def load_gdf_data():
-#     data_gdf = pd.read_csv('gdf_public_impact.csv')
-#     data_gdf = data_gdf.dropna(subset=['lat', 'lng'])
-#     data_gdf = data_gdf.rename(columns={'lng': 'longitude', 'lat': 'latitude'})
-
-#     if 'timestamp' in data_gdf.columns:
-#         data_gdf['timestamp'] = pd.to_datetime(data_gdf['timestamp'], errors='coerce')
-#         data_gdf = data_gdf.dropna(subset=['timestamp'])
+@st.cache_data
+def load_place_data(file_name, place_type):
+    try:
+        data = pd.read_csv(file_name)
+        data = data.dropna(subset=['lat', 'lng', 'district'])
+        data = data.rename(columns={'lng': 'longitude', 'lat': 'latitude'})
         
-#     return data_gdf
+        data['place_type'] = place_type
+        
+        if place_type == "Department (หน่วยงานราชการ)":
+             data = data.rename(columns={'department_name': 'name'})
+        elif place_type == "Community (ชุมชน)":
+             data = data.rename(columns={'community_name': 'name'})
+        elif place_type == "School (โรงเรียน)":
+             data = data.rename(columns={'school_name': 'name'})
+        elif place_type == "Hospital (โรงพยาบาล)":
+             data = data.rename(columns={'hospital_name': 'name'})
+        
+        required_cols = ['name', 'district', 'latitude', 'longitude', 'place_type']
+        missing_cols = [col for col in required_cols if col not in data.columns]
+        if missing_cols:
+             if 'name' in missing_cols:
+                 st.warning(f"ไฟล์ {file_name} ไม่มีคอลัมน์ชื่อสถานที่ที่เหมาะสม")
+                 data['name'] = f"Unnamed {place_type}"
+             
+             data_cols = [col for col in required_cols if col in data.columns]
+             return data[data_cols]
+            
+        return data[required_cols]
+    except FileNotFoundError:
+        st.error(f"ไม่พบไฟล์: {file_name}")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"เกิดข้อผิดพลาดในการโหลด {file_name}: {e}")
+        return pd.DataFrame()
+    
+data_department = load_place_data('department_clean.csv', 'Department (หน่วยงานราชการ)')
+data_community = load_place_data('community_clean.csv', 'Community (ชุมชน)')
+data_school = load_place_data('school_clean.csv', 'School (โรงเรียน)')
+data_hospital = load_place_data('hospital_clean.csv', 'Hospital (โรงพยาบาล)')
 
-# data_gdf = load_gdf_data()
-
+data_places_all = pd.concat([data_department, data_community, data_school, data_hospital], ignore_index=True)
 
 MAP_STYLES = {
     'Light': pdk.map_styles.LIGHT,
@@ -85,92 +111,149 @@ params = render_sidebar_filters(data_result)
 map_style = params['map_style']
 selected_district = params['selected_district']
 selected_year = params['selected_year']
+selected_place_type = params['selected_place_type'] 
+
+# -----------------------------------------------------
+## ⚙️ Global Data Filtering Logic (🔥 ย้ายตรรกะทั้งหมดมาที่นี่)
+# -----------------------------------------------------
+
+# 1. เริ่มต้นด้วยข้อมูล Traffy Fondue ทั้งหมด
+filtered_data = data_result.copy()
+
+# *** ลบส่วนที่แสดง 'ผลการกรองเหตุการณ์ (Global)' ออกจาก Sidebar ***
+st.sidebar.markdown('---')
+# st.sidebar.subheader('ผลการกรองเหตุการณ์ (Global)') <--- บรรทัดนี้ถูกลบ
+# st.sidebar.write(f"เหตุการณ์เริ่มต้น: **{len(filtered_data)}**") <--- บรรทัดนี้ถูกลบ
+
+# 2. ฟิลเตอร์เขต
+if selected_district != "ทั้งหมด":
+    filtered_data = filtered_data[filtered_data["district"] == selected_district]
+    # st.sidebar.write(f"หลังกรองเขต: **{len(filtered_data)}**") <--- บรรทัดนี้ถูกลบ
+
+# 3. ฟิลเตอร์ปี
+if selected_year != "ทั้งหมด":
+    if pd.api.types.is_datetime64_any_dtype(filtered_data['timestamp']):
+        filtered_data = filtered_data[filtered_data["timestamp"].dt.year == selected_year]
+        # st.sidebar.write(f"หลังกรองปี: **{len(filtered_data)}**") <--- บรรทัดนี้ถูกลบ
+
+# 4. ฟิลเตอร์ประเภทสถานที่ (Spatial Filtering Logic)
+if selected_place_type != "ทั้งหมด":
+    
+    if selected_place_type == "Department (หน่วยงานราชการ)":
+        place_data_for_filter = data_department
+    elif selected_place_type == "Community (ชุมชน)":
+        place_data_for_filter = data_community
+    elif selected_place_type == "School (โรงเรียน)":
+        place_data_for_filter = data_school
+    elif selected_place_type == "Hospital (โรงพยาบาล)":
+        place_data_for_filter = data_hospital
+    else:
+        place_data_for_filter = pd.DataFrame() 
+
+    if SCIPY_AVAILABLE and not place_data_for_filter.empty and not filtered_data.empty:
+        
+        search_radius_meters = st.sidebar.slider(
+            'รัศมีการค้นหาเหตุการณ์ใกล้สถานที่ (เมตร):',
+            min_value=10, 
+            max_value=1000, 
+            value=200,
+            step=10,
+            key='search_radius_global' 
+        )
+        
+        radius_degree = search_radius_meters / 111000 
+        
+        place_coords = place_data_for_filter[['latitude', 'longitude']].values
+        tree = cKDTree(place_coords)
+        
+        incident_coords = filtered_data[['latitude', 'longitude']].values
+        
+        indices = tree.query_ball_point(incident_coords, r=radius_degree)
+        
+        filtered_indices = [i for i, neighbors in enumerate(indices) if neighbors]
+        filtered_data = filtered_data.iloc[filtered_indices]
+
+        # st.sidebar.write(f"หลังกรองสถานที่ (ใกล้ {selected_place_type} ใน {search_radius_meters}m): **{len(filtered_data)}**") <--- บรรทัดนี้ถูกลบ
+        # st.sidebar.markdown(f"**เหตุการณ์ที่เหลือ: {len(filtered_data)}**") <--- บรรทัดนี้ถูกลบ
+
+    elif not SCIPY_AVAILABLE:
+        st.sidebar.warning("⚠️ SciPy ไม่พร้อมใช้งาน. ข้ามการกรองเชิงพื้นที่")
+    elif place_data_for_filter.empty:
+        st.sidebar.info(f"ไม่พบสถานที่ประเภท **{selected_place_type}** ที่จะใช้กรองเหตุการณ์")
+
+st.sidebar.markdown('---')
 
 # -----------------------------------------------------
 ## 📑 Main Panel Code (ใช้ Tabs)
 # -----------------------------------------------------
 
 # 1. กำหนดชื่อ Tabs
-tab_ranking, tab_scatter, tab_placemap = st.tabs([
-# tab_ranking, tab_scatter, tab_district, tab_placemap = st.tabs([
+tab_ranking, tab_scatter = st.tabs([
     "🥇 Ranking & Summary",
-    "🗺️ Scatter Map",
-    # "📊 District Map (gdf_public_impact)",
-    "📍 Place Map" 
+    "🗺️ Urgency Map", 
 ])
 
 # -----------------------------------------------------
 ## 🥇 Tab 1: Ranking & Summary
 # -----------------------------------------------------
 with tab_ranking:
-    # ตรรกะการฟิลเตอร์ (ยังคงต้องทำ เพราะ Tab อื่นใช้ filtered_data_gdf)
-    if selected_district != 'ทั้งหมด' and 'district' in data_result.columns:
-        filtered_data_result = data_result[data_result['district'] == selected_district].copy()
+    
+    # ใช้ filtered_data ที่ถูกกรองครบถ้วนแล้ว
+    
+    # ---------------------------------------------------
+    # 🔥 แสดงหัวข้อตามสถานะการกรอง
+    # ---------------------------------------------------
+    if selected_district != 'ทั้งหมด' and 'district' in filtered_data.columns:
         st.header(f'📑 แสดงข้อมูลเฉพาะ: **เขต{selected_district}**')
-    elif 'district' in data_result.columns and not data_result.empty:
-        filtered_data_result = data_result.copy()
-        st.header('📑 แสดงข้อมูล: **ทุกเขต**')
     else:
-        filtered_data_result = data_result.copy()
-
-    st.write(f"จำนวนข้อมูลที่แจ้งเหตุเข้ามา: **{len(filtered_data_result)}** รายการ")
+        st.header('📑 แสดงข้อมูล: **ทุกเขต**')
+    # ---------------------------------------------------
+    # 🔥 แสดงจำนวนข้อมูลที่แจ้งเหตุเข้ามา
+    # ---------------------------------------------------
+    st.write(f"จำนวนข้อมูลที่แจ้งเหตุเข้ามา: **{len(filtered_data)}** รายการ")
 
     st.header('🥇 District Ranking: เขตที่แจ้งเหตุเข้ามามากที่สุด')
     
-    district_counts = data_result['district'].value_counts()
-    ranking_df = district_counts.reset_index()
-    ranking_df.columns = ['District', 'Number of Incidents']
-    ranking_df = ranking_df.sort_values(by='Number of Incidents', ascending=False).reset_index(drop=True)
+    # ใช้ filtered_data ในการนับจำนวนเหตุการณ์
+    if 'district' in filtered_data.columns and not filtered_data.empty:
+        district_counts = filtered_data['district'].value_counts() 
+        ranking_df = district_counts.reset_index()
+        ranking_df.columns = ['District', 'Number of Incidents']
+        ranking_df = ranking_df.sort_values(by='Number of Incidents', ascending=False).reset_index(drop=True)
 
-    st.caption('ข้อมูลจากการนับคอลัมน์ "district" ใน: gdf_public_impact.csv')
+        st.caption('ข้อมูลจากการนับคอลัมน์ "district" ใน: result.csv')
 
-    if not ranking_df.empty:
         st.dataframe(ranking_df, use_container_width=True)
     else:
-        st.info("ไม่พบข้อมูลเขต หรือคอลัมน์ 'district' มีปัญหา")
+        st.info("ไม่พบข้อมูลเหตุการณ์ที่ตรงตามตัวกรองที่กำหนด")
+
+    # -----------------------------------------------------
+    # 🔥 เพิ่มตารางข้อมูลดิบที่ถูกกรองแล้ว (ตามที่ร้องขอ)
+    # -----------------------------------------------------
+    st.markdown("---")
     
+    st.header('🔍 ข้อมูลเหตุการณ์ที่ถูกกรอง (Data Table)')
+    st.caption(f'แสดงข้อมูล **{len(filtered_data)}** รายการ ที่ผ่านตัวกรองทั้งหมด')
+    
+    if not filtered_data.empty:
+        # แสดงข้อมูลทั้งหมด (ทุกคอลัมน์)
+        st.dataframe(filtered_data, use_container_width=True)
+    else:
+        st.info("ไม่พบข้อมูลเหตุการณ์ที่ตรงตามตัวกรองที่กำหนด เพื่อแสดงในตารางนี้")
+    # -----------------------------------------------------
+
 # -----------------------------------------------------
 ## 🗺️ Tab 2: Scatter Map
 # -----------------------------------------------------
 with tab_scatter:
-    st.header('🗺️ Scatter Map: ตำแหน่งเหตุการณ์ (test_data.csv)')
+    st.header('🗺️ Urgency Map: ตำแหน่งเหตุการณ์')
 
-    # -------------------------------
-    # ⭐ ใช้ค่าฟิลเตอร์จาก Sidebar
-    # -------------------------------
-    filtered_data = data_result.copy()
-
-    # ฟิลเตอร์เขต
-    if selected_district != "ทั้งหมด":
-        filtered_data = filtered_data[filtered_data["district"] == selected_district]
-
-    # ฟิลเตอร์ปี
-    if selected_year != "ทั้งหมด":
-        filtered_data = filtered_data[filtered_data["timestamp"].dt.year == selected_year]
-
-    # -------------------------------
-    # ⭐ ส่งเข้า Scatter Map (อันนี้สำคัญ)
-    # -------------------------------
-    try:
-        render_scatter_map(filtered_data, map_style)
-    except Exception as e:
-        st.error(f"เกิดข้อผิดพลาดในการแสดง Scatter Map: {e}")
-
-# # -----------------------------------------------------
-# ## 📊 Tab 3: District Map
-# # -----------------------------------------------------
-# with tab_district:
-#     st.header('📊 District Map: แผนที่ตามเขต (gdf_public_impact.csv)')
-#     try:
-#         # ใช้ filtered_data_gdf ที่ถูกฟิลเตอร์จาก Sidebar
-#         render_district_map(filtered_data_gdf, map_style) 
-#     except Exception as e:
-#         st.error(f"เกิดข้อผิดพลาดในการแสดง District Map: {e}")
-
-# -----------------------------------------------------
-## 📍 Tab 4: Placemap
-# -----------------------------------------------------
-with tab_placemap:
-    # เรียกใช้ฟังก์ชันจากไฟล์ใหม่
-    render_place_map() 
-
+    st.write(f"แสดงเหตุการณ์จำนวน **{len(filtered_data)}** รายการที่ผ่านการกรอง")
+ 
+    if not filtered_data.empty:
+        try:
+            render_scatter_map(filtered_data, map_style)
+        except Exception as e:
+            st.error(f"เกิดข้อผิดพลาดในการแสดง Urgency Map: {e}")
+    else:
+        st.info("ไม่พบข้อมูลเหตุการณ์ที่ตรงตามตัวกรอง")

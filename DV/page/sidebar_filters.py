@@ -1,4 +1,4 @@
-# page/sidebar_filters.py
+# page/sidebar_filters.py (ปรับปรุง)
 
 import streamlit as st
 import pandas as pd
@@ -14,6 +14,15 @@ bkk_district = [
     "คันนายาว", "สะพานสูง", "วังทองหลาง", "คลองสามวา", "บางนา", "ทวีวัฒนา", "ทุ่งครุ", "บางบอน"
 ]
 
+# 🔥 รายการประเภทสถานที่ใหม่ (New Place Type List)
+place_types = [
+    "ทั้งหมด",
+    "Department (หน่วยงานราชการ)",
+    "Community (ชุมชน)",
+    "School (โรงเรียน)",
+    "Hospital (โรงพยาบาล)"
+]
+
 # -----------------------------------------------------
 # 🛠️ Render Sidebar Filters
 # -----------------------------------------------------
@@ -22,16 +31,15 @@ def render_sidebar_filters(data_result: pd.DataFrame) -> Dict[str, Any]:
 
     selected_year = "ทั้งหมด" 
     
+    # --- ตัวกรองปี (Year Filter) ---
     if 'timestamp' in data_result.columns:
+        # โค้ดเดิมสำหรับ Year Filter
         try:
             available_years = sorted(
                 data_result['timestamp'].dt.year.unique().tolist(), 
                 reverse=True
             )
             
-            # -------------------------------------------
-            # 🔥 1. ตัวกรองปี (Year Filter) - เพิ่มเข้ามาใหม่
-            # -------------------------------------------
             if available_years:
                 year_list = ["ทั้งหมด"] + available_years
                 
@@ -50,7 +58,19 @@ def render_sidebar_filters(data_result: pd.DataFrame) -> Dict[str, Any]:
     st.sidebar.markdown("---")
 
     # -------------------------------------------
-    # 🔥 2. ตัวกรองเขต (District Filter)
+    # 🔥 2. ตัวกรองประเภทสถานที่ (Place Type Filter) - เพิ่มเข้ามาใหม่
+    # -------------------------------------------
+    selected_place_type = st.sidebar.selectbox(
+        '🏢 เลือกประเภทสถานที่ที่ต้องการค้นหา:',
+        place_types,
+        index=0,
+        key='place_type_selector'
+    )
+
+    st.sidebar.markdown("---")
+
+    # -------------------------------------------
+    # 🔥 3. ตัวกรองเขต (District Filter)
     # -------------------------------------------
     district_list = ["ทั้งหมด"] + bkk_district
 
@@ -65,7 +85,7 @@ def render_sidebar_filters(data_result: pd.DataFrame) -> Dict[str, Any]:
 
     # --- Map Style Selection ---
     map_style = st.sidebar.selectbox(
-        'เลือกรูปแบบแผนที่พื้นฐาน',
+        '🎨 เลือกรูปแบบแผนที่พื้นฐาน',
         options=['Light', 'Dark', 'Road', 'Satellite'],
         index=0,
         key='map_style_selector'
@@ -74,5 +94,6 @@ def render_sidebar_filters(data_result: pd.DataFrame) -> Dict[str, Any]:
     return {
         'map_style': map_style,
         'selected_district': selected_district,
-        'selected_year': selected_year 
+        'selected_year': selected_year,
+        'selected_place_type': selected_place_type  # 🔥 ส่งค่าตัวกรองประเภทสถานที่กลับไปด้วย
     }

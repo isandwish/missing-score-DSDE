@@ -40,11 +40,9 @@ def final_hybrid_score_color(final_hybrid_score):
         return [0, 255, 0, 230]           # เขียว
 
 # -----------------------------
-# 🟢 Circle Map
+# 🟢 Urgency Map
 # -----------------------------
 def render_scatter_map(filtered_data, map_style):
-
-    st.header("🟢 Circle Map Only (Rank Points)")
 
     if filtered_data.empty:
         st.warning("ไม่มีข้อมูล")
